@@ -1,0 +1,89 @@
+version: "3.9"
+
+services:
+  # ============================================================================
+  # PostgreSQL 16 with PostGIS 3.4 Spatial Database
+  # ============================================================================
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: aerocool_postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aerocool}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aerocool_secure_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-aerocool_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aerocool} -d ${POSTGRES_DB:-aerocool_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aerocool_net
+
+  # ============================================================================
+  # Redis In-Memory Cache & Message Broker
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: aerocool_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aerocool_net
+
+  # ============================================================================
+  # AeroCool-AI FastAPI Application & Core Engine
+  # ============================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aerocool_api
+    restart: unless-stopped
+    depends_on:
+      postgis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - AEROCOOL_ENV=${AEROCOOL_ENV:-production}
+      - AEROCOOL_DEBUG=${AEROCOOL_DEBUG:-false}
+      - AEROCOOL_APP_HOST=0.0.0.0
+      - AEROCOOL_APP_PORT=8000
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-aerocool}:${POSTGRES_PASSWORD:-aerocool_secure_pass}@postgis:5432/${POSTGRES_DB:-aerocool_db}
+      - REDIS_URL=redis://redis:6379/0
+      - GEE_SERVICE_ACCOUNT=${GEE_SERVICE_ACCOUNT}
+      - GEE_PROJECT_ID=${GEE_PROJECT_ID}
+      - CDS_API_URL=${CDS_API_URL}
+      - CDS_API_KEY=${CDS_API_KEY}
+      - EARTHDATA_BEARER_TOKEN=${EARTHDATA_BEARER_TOKEN}
+    ports:
+      - "${AEROCOOL_APP_PORT:-8000}:8000"
+    volumes:
+      - ./data_cache:/app/data_cache
+      - ./checkpoints:/app/checkpoints
+    networks:
+      - aerocool_net
+
+volumes:
+  postgis_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  aerocool_net:
+    driver: bridge
