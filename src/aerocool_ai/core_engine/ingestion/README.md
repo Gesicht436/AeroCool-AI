@@ -21,7 +21,7 @@ The `ingestion` submodule handles automated multi-source geospatial and meteorol
   $$\text{LST}\,(^\circ\text{C}) = (\text{ST\_B10} \times 0.00341802 + 149.0) - 273.15$$
 - **Cloud & Shadow Screening**:
   Decodes Landsat `QA_PIXEL` bitmask (Bit 1: Dilated Cloud, Bit 3: Cloud, Bit 4: Cloud Shadow).
-- **Graceful Fallback**: Automatically generates high-fidelity synthetic urban heat island grids if Earth Engine credentials are not present, enabling uninterrupted local testing.
+- **Strict Authentication & Verification**: In Strict Error Mode, raises explicit `RuntimeError` if Earth Engine credentials (`GEE_SERVICE_ACCOUNT` / `GEE_PROJECT_ID`) are not authenticated.
 - **Usage Example**:
   ```python
   from aerocool_ai.core_engine.ingestion.gee_landsat_collector import LandsatLSTCollector

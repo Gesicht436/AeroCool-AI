@@ -1,18 +1,25 @@
 """AeroCool-AI FastAPI ASGI Application Entrypoint.
 
 Provides the REST API interface for UHI hotspot detection, physics-informed
-temperature simulation, and constrained urban cooling optimization.
+temperature simulation, constrained urban cooling optimization, authentication,
+and administrator telemetry operations.
 """
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
 from typing import Any, AsyncGenerator, Dict
 
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
+from aerocool_ai.backend_api.middleware.telemetry_middleware import TelemetryMiddleware
+from aerocool_ai.backend_api.routes.admin import router as admin_router
+from aerocool_ai.backend_api.routes.auth import router as auth_router
 from aerocool_ai.backend_api.routes.hotspots import router as hotspots_router
 from aerocool_ai.backend_api.routes.optimization import router as optimization_router
 from aerocool_ai.backend_api.routes.simulation import router as simulation_router
@@ -64,6 +71,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Custom Performance & Telemetry Middleware
+app.add_middleware(TelemetryMiddleware)
+
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
@@ -74,14 +84,11 @@ app.add_middleware(
 )
 
 # Include Routers
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 app.include_router(hotspots_router, prefix="/api/v1")
 app.include_router(simulation_router, prefix="/api/v1")
 app.include_router(optimization_router, prefix="/api/v1")
-
-
-from pathlib import Path
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 
 # Check if frontend/dist exists in src/aerocool_ai/frontend/dist to mount React SPA
 frontend_dist_path = Path(__file__).resolve().parent.parent / "frontend" / "dist"

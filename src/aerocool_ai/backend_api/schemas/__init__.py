@@ -1,5 +1,12 @@
 """Pydantic Request and Response Schemas for API Serialization."""
 
+from aerocool_ai.backend_api.schemas.auth_schema import (
+    TokenResponse,
+    UserListResponse,
+    UserLoginRequest,
+    UserProfileResponse,
+    UserRegisterRequest,
+)
 from aerocool_ai.backend_api.schemas.hotspot_schema import (
     HotspotDetectionRequest,
     HotspotFeature,
@@ -18,6 +25,11 @@ from aerocool_ai.backend_api.schemas.scenario_request import (
     SimulationRunRequest,
     SimulationRunResponse,
 )
+from aerocool_ai.backend_api.schemas.telemetry_schema import (
+    SystemHealthResponse,
+    TelemetryEventItem,
+    TelemetrySummaryResponse,
+)
 
 __all__ = [
     "HotspotDetectionRequest",
@@ -32,4 +44,12 @@ __all__ = [
     "OptimizationAllocationResponse",
     "ParetoPointSchema",
     "ParetoFrontierResponse",
+    "UserLoginRequest",
+    "UserRegisterRequest",
+    "UserProfileResponse",
+    "TokenResponse",
+    "UserListResponse",
+    "TelemetryEventItem",
+    "TelemetrySummaryResponse",
+    "SystemHealthResponse",
 ]

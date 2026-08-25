@@ -260,6 +260,13 @@ uv run uvicorn aerocool_ai.backend_api.main:app --host 0.0.0.0 --port 8000 --rel
 | `GET` | `/api/v1/simulation` | Lists previous simulation runs with pagination. |
 | `POST` | `/api/v1/optimization/allocate` | Solves budget-constrained multi-objective spatial allocation of cooling interventions. |
 | `POST` | `/api/v1/optimization/pareto` | Computes Pareto efficiency frontier across investment budget steps. |
+| `POST` | `/api/v1/auth/login` | Authenticates user with email/password and returns signed JWT token. |
+| `POST` | `/api/v1/auth/register` | Registers new customer or admin municipal user accounts. |
+| `POST` | `/api/v1/auth/demo-login/{role}` | Instant 1-click demo access for `admin` or `customer`. |
+| `GET` | `/api/v1/admin/telemetry` | Retrieves system telemetry KPIs, P95 latency, cache efficiency, and error rates (Admin only). |
+| `GET` | `/api/v1/admin/telemetry/logs` | Real-time live API audit request stream (Admin only). |
+| `GET` | `/api/v1/admin/users` | Lists registered municipal users and roles (Admin only). |
+| `GET` | `/api/v1/admin/health` | Hardware accelerator, CPU, memory, and satellite provider health diagnostics (Admin only). |
 
 ---
 

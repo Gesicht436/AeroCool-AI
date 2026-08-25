@@ -13,14 +13,17 @@
 ```mermaid
 graph TB
     subgraph Clients ["Client Layer"]
-        GIS["GIS Clients (QGIS, ArcGIS)"]
-        DASH["Municipal Planning Dashboard"]
-        CLI["CLI / Batch Automation"]
+        REACT["React 19 SPA (Cooling Studio & Admin Telemetry Portal)"]
+        GIS["GIS Clients (QGIS, ArcGIS via GeoJSON)"]
+        CLI["CLI / Batch Automation Scripts"]
     end
 
     subgraph API ["FastAPI Web & Application Layer (/api/v1)"]
         MAIN["FastAPI ASGI Entrypoint (main.py)"]
-        DEP["Dependency Injection (DB, Redis, Settings)"]
+        MW["Performance & Telemetry Middleware"]
+        DEP["Dependency Injection (DB, Redis, Auth RBAC, Settings)"]
+        R_AUTH["Auth Router (/auth)"]
+        R_ADMIN["Admin Router (/admin)"]
         R_HOT["Hotspot Router (/hotspots)"]
         R_SIM["Simulation Router (/simulation)"]
         R_OPT["Optimization Router (/optimization)"]
@@ -43,21 +46,22 @@ graph TB
 
         subgraph Models ["Physics-Informed ML Core"]
             BASE["XGBoost / RF Regressor Baseline"]
-            PINN["UrbanHeatPINN (Fourier MLP)"]
+            PINN["UrbanHeatPINN (Fourier MLP + GPU Acceleration)"]
             LOSS["Surface Energy Balance & PDE Loss"]
             TRAIN["PINN Training & Checkpoint Pipeline"]
         end
 
         subgraph Optimization ["Spatial Optimization & Simulation"]
             SIM["Parametric Cooling Simulator"]
-            ALLOC["Constrained Spatial Allocation Solver"]
+            ALLOC["MILP & Greedy Spatial Allocation Solvers"]
             IMPACT["Thermal & Energy Impact Evaluator"]
         end
     end
 
     subgraph Persistence ["Persistence & Cache Layer"]
         PG[(PostgreSQL 16 + PostGIS 3.4)]
-        REDIS[(Redis 7 In-Memory Cache)]
+        REDIS[(Redis 7 In-Memory TTL Cache)]
+        RING[(Fast In-Memory Telemetry Ring Buffer)]
     end
 
     Clients <--> API
@@ -252,13 +256,26 @@ erDiagram
 - **Async Connection Pool** (`connection.py`): Managed async session generator with automatic transaction rollback on failure.
 - **Layer Repository** (`layer_repository.py`): Implements spatial bounding box intersection queries using PostGIS `ST_Intersects` and `ST_MakeEnvelope`.
 - **Scenario Repository** (`scenario_repository.py`): Manages simulation runs, audit logs, and result GeoJSON persistence.
+- **User Repository** (`user_repository.py`): Manages user accounts, PBKDF2 credential verification, roles, and profile lookups directly in PostgreSQL.
+- **Telemetry Repository** (`telemetry_repository.py`): Real-time API event recording, database audit logging, and latency percentile calculation in PostgreSQL.
 
 ---
 
 ### 2.6. FastAPI Web Layer & Schemas
 Located in [`src/aerocool_ai/backend_api/`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/backend_api/README.md).
 
+- **Performance & Telemetry Middleware** (`telemetry_middleware.py`):
+  - Intercepts all `/api/v1` HTTP requests to measure execution duration in milliseconds (`X-Process-Time-Ms`).
+  - Records status codes, caller roles, and endpoints into `TelemetryRepository`.
 - **Route Controllers**:
+  - `POST /api/v1/auth/login`: Authenticate user credentials and return signed JWT bearer token.
+  - `POST /api/v1/auth/register`: Register new municipal officer or customer accounts.
+  - `POST /api/v1/auth/demo-login/{role}`: 1-click instant demo access for `admin` or `customer`.
+  - `GET /api/v1/auth/me`: Resolve current authenticated user profile.
+  - `GET /api/v1/admin/telemetry`: Aggregated system performance KPIs (P95 latency, cache efficiency).
+  - `GET /api/v1/admin/telemetry/logs`: Real-time streaming API request audit log.
+  - `GET /api/v1/admin/users`: Directory listing of registered users and municipal organizations.
+  - `GET /api/v1/admin/health`: Hardware, CUDA/MPS/CPU, RAM, and satellite EO provider health diagnostics.
   - `POST /api/v1/hotspots/detect`: Full UHI hotspot detection pipeline returning RFC 7946 GeoJSON.
   - `GET /api/v1/hotspots/{hotspot_id}`: Granular thermodynamic diagnostic profile.
   - `POST /api/v1/simulation/run`: Parametric simulation with PostGIS scenario persistence.
@@ -267,7 +284,9 @@ Located in [`src/aerocool_ai/backend_api/`](file:///C:/Users/mayan/Development/P
   - `POST /api/v1/optimization/pareto`: Multi-budget Pareto efficiency frontier analysis.
 - **Dependency Providers** (`dependencies.py`):
   - `get_db()`: Scoped `AsyncSession` database injection.
-  - `get_redis_client()`: High-speed async cache with fallback in-memory mock.
+  - `get_redis_client()`: High-speed async Redis client with strict 503 error handling if cache is unreachable.
+  - `get_current_user()`: Validates JWT bearer tokens and extracts current `UserAccount`.
+  - `require_admin()`: Enforces RBAC protection ensuring caller possesses `admin` role.
   - `get_app_settings()`: Cached settings singleton.
 
 ---

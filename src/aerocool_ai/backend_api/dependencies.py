@@ -1,6 +1,6 @@
 """FastAPI Dependency Injection Providers.
 
-Manages scoped database sessions, caching clients, and configuration injection.
+Manages scoped database sessions, caching clients, user authentication, and configuration injection.
 """
 
 from __future__ import annotations
@@ -8,11 +8,15 @@ from __future__ import annotations
 import logging
 from typing import AsyncGenerator, Optional
 
-from fastapi import Depends
+from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from aerocool_ai.backend_api.auth import decode_access_token
 from aerocool_ai.config import Settings, get_settings
 from aerocool_ai.database.connection import get_async_session
+from aerocool_ai.database.models.users import UserAccount, UserRole
+from aerocool_ai.database.repositories.telemetry_repository import TelemetryRepository
+from aerocool_ai.database.repositories.user_repository import UserRepository
 
 logger = logging.getLogger(__name__)
 
@@ -29,42 +33,13 @@ async def get_db(
     yield session
 
 
-import time
-
-
-class SimpleInMemoryCache:
-    """In-memory high-speed cache with TTL expiry when Redis is offline."""
-
-    def __init__(self) -> None:
-        self._store: dict[str, tuple[str, Optional[float]]] = {}
-
-    async def get(self, key: str) -> Optional[str]:
-        if key not in self._store:
-            return None
-        val, expiry = self._store[key]
-        if expiry is not None and time.time() > expiry:
-            del self._store[key]
-            return None
-        return val
-
-    async def set(self, key: str, value: str, ex: Optional[int] = None) -> None:
-        expiry = (time.time() + ex) if ex else None
-        self._store[key] = (value, expiry)
-
-    async def delete(self, key: str) -> None:
-        self._store.pop(key, None)
-
-    async def ping(self) -> bool:
-        return True
-
-
 _redis_client = None
 
 
 async def get_redis_client(
     settings: Settings = Depends(get_app_settings),
 ):
-    """Dependency provider for async Redis client with fallback."""
+    """Dependency provider for async Redis client in strict mode."""
     global _redis_client
     if _redis_client is None:
         try:
@@ -75,14 +50,98 @@ async def get_redis_client(
                 encoding="utf-8",
                 decode_responses=True,
             )
-            # Test ping
+            # Verify Redis connectivity
             await client.ping()
             _redis_client = client
             logger.info("Connected to Redis cache server.")
         except Exception as exc:
-            logger.warning(
-                f"Redis connection failed ({exc}). Using in-memory fallback cache."
+            logger.error(f"Redis connection failed: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"Redis cache server unreachable ({exc}). "
+                    f"Please verify Redis is running at {settings.effective_redis_url} or launch via 'docker compose up -d redis'."
+                ),
             )
-            _redis_client = SimpleInMemoryCache()
 
     return _redis_client
+
+
+async def get_user_repository(
+    db: AsyncSession = Depends(get_db),
+) -> UserRepository:
+    """Provide UserRepository instance."""
+    return UserRepository(db)
+
+
+async def get_telemetry_repository(
+    db: AsyncSession = Depends(get_db),
+) -> TelemetryRepository:
+    """Provide TelemetryRepository instance."""
+    return TelemetryRepository(db)
+
+
+async def get_current_user(
+    authorization: Optional[str] = Header(None),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> UserAccount:
+    """Validate bearer token and resolve current authenticated user."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token required. Please log in.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = authorization.split(" ", 1)[1]
+    try:
+        payload = decode_access_token(token)
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Malformed authentication token payload.",
+            )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(val_err),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        user = await user_repo.get_by_id(user_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database error during user lookup: {exc}",
+        )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User account not found.",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is deactivated.",
+        )
+
+    return user
+
+
+async def require_admin_user(
+    current_user: UserAccount = Depends(get_current_user),
+) -> UserAccount:
+    """Require authenticated user to have Administrator privileges."""
+    if current_user.role != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrative privileges required to access this endpoint.",
+        )
+    return current_user
+
+
+require_admin = require_admin_user

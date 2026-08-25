@@ -63,19 +63,6 @@ export interface AllocatedParcel {
   priority_rank: number;
 }
 
-export interface OptimizationResponse {
-  total_budget_usd: number;
-  total_spent_usd: number;
-  remaining_budget_usd: number;
-  total_area_modified_m2: number;
-  mean_cooling_celsius: number;
-  max_cooling_celsius: number;
-  intervention_counts: Record<string, number>;
-  allocated_parcels: AllocatedParcel[];
-  geojson_allocation: any;
-  metadata: Record<string, any>;
-}
-
 export interface ParetoPoint {
   budget_usd: number;
   spent_usd: number;
@@ -99,4 +86,61 @@ export interface CityPreset {
   center: [number, number];
   description: string;
   climateZone: string;
+}
+
+export type UserRole = 'customer' | 'admin';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  organization?: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+  last_login_at?: string | null;
+}
+
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+  user: UserProfile;
+}
+
+export interface TelemetryLogItem {
+  id: string;
+  endpoint: string;
+  method: string;
+  status_code: number;
+  duration_ms: number;
+  user_id?: string | null;
+  user_role: string;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  error_message?: string | null;
+  timestamp: string;
+}
+
+export interface TelemetrySummary {
+  total_requests: number;
+  avg_latency_ms: number;
+  p95_latency_ms: number;
+  error_rate_percent: number;
+  cache_hit_ratio_percent: number;
+  active_sessions: number;
+  status_breakdown: Record<string, number>;
+  endpoint_distribution: Record<string, number>;
+  server_uptime_hours: number;
+  system_status: string;
+}
+
+export interface SystemHealth {
+  status: string;
+  timestamp: string;
+  cpu_usage_percent: number;
+  memory_usage_mb: number;
+  database_connected: boolean;
+  redis_connected: boolean;
+  pinn_engine_device: string;
+  satellite_providers: Record<string, string>;
 }

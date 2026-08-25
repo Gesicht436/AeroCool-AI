@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -44,10 +43,11 @@ async def run_cooling_simulation(
     db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_app_settings),
 ) -> SimulationRunResponse:
-    """Simulate the thermodynamic cooling impact of spatial urban interventions."""
+    """Simulate the thermodynamic cooling impact of spatial urban interventions and persist to database."""
+    scenario_repo = ScenarioRepository(db)
+
+    # 1. Attempt to create pending scenario entry in PostGIS database
     try:
-        scenario_repo = ScenarioRepository(db)
-        # Create pending scenario entry in DB
         db_scenario = await scenario_repo.create_scenario(
             scenario_name=payload.scenario_name,
             strategy_type=payload.strategy_type,
@@ -56,9 +56,20 @@ async def run_cooling_simulation(
             description=payload.description,
             boundary_bbox=payload.bbox,
         )
+    except Exception as exc:
+        logger.error(f"Database error during scenario creation: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"PostgreSQL/PostGIS database connection failed ({exc}). "
+                f"Please verify PostgreSQL is running at {settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db} "
+                f"or launch via 'docker compose up -d postgis'."
+            ),
+        )
 
+    try:
         bbox = payload.bbox
-        # 1. Fetch baseline layers
+        # 2. Fetch baseline layers
         lst_collector = LandsatLSTCollector(settings)
         lst_res = lst_collector.fetch_lst_aoi(bbox, "2026-06-01", "2026-08-31")
 
@@ -80,7 +91,7 @@ async def run_cooling_simulation(
             plan_area_fraction=morph_res.plan_area_fraction,
         )
 
-        # 2. Configure strategy
+        # 3. Configure strategy
         simulator = CoolingInterventionSimulator()
         strategy_type_enum = (
             InterventionType(payload.strategy_type)
@@ -107,7 +118,7 @@ async def run_cooling_simulation(
             evaporative_efficiency=base_strategy.evaporative_efficiency,
         )
 
-        # 3. Simulate cooling
+        # 4. Simulate cooling thermodynamics
         sim_res = simulator.simulate(
             baseline_lst=lst_res.data,
             albedo_grid=feat_set.albedo,
@@ -126,7 +137,7 @@ async def run_cooling_simulation(
             sim_res.mean_cooling_celsius *= scaling_factor
             sim_res.max_cooling_celsius *= scaling_factor
 
-        # 4. Evaluate impact
+        # 5. Evaluate microclimate impact
         evaluator = ImpactEvaluator()
         impact = evaluator.evaluate(
             baseline_lst=sim_res.baseline_lst,
@@ -135,7 +146,7 @@ async def run_cooling_simulation(
             capital_investment_usd=sim_res.estimated_cost_usd,
         )
 
-        # 5. Format GeoJSON
+        # 6. Format GeoJSON
         min_lon, min_lat, max_lon, max_lat = bbox
         grid_h, grid_w = sim_res.delta_lst.shape
         lon_step = (max_lon - min_lon) / grid_w
@@ -164,7 +175,7 @@ async def run_cooling_simulation(
             "features": sample_features,
         }
 
-        # 6. Update scenario in database
+        # 7. Persist completion status and results to PostGIS
         await scenario_repo.update_scenario_status(db_scenario.id, "completed")
         await scenario_repo.record_scenario_result(
             scenario_id=db_scenario.id,
@@ -197,11 +208,21 @@ async def run_cooling_simulation(
             metadata={"cells_modified": int(np.sum(sim_res.intervention_mask))},
         )
 
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.error(f"Simulation failed: {exc}", exc_info=True)
+        logger.error(f"Simulation execution failed: {exc}", exc_info=True)
+        # Attempt to mark scenario as failed in DB
+        try:
+            await scenario_repo.update_scenario_status(
+                db_scenario.id, "failed", error_message=str(exc)
+            )
+        except Exception:
+            pass
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Simulation run failed: {str(exc)}",
+            detail=f"Simulation calculation failed: {str(exc)}",
         )
 
 
@@ -254,23 +275,25 @@ async def get_scenario(
     summary="List Simulation Scenarios",
 )
 async def list_scenarios(
-    status: Optional[str] = None,
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[ScenarioItemResponse]:
-    """List historical simulation runs with pagination."""
+    """List historical simulation scenarios with optional status filter."""
     repo = ScenarioRepository(db)
-    scenarios = await repo.list_scenarios(status=status, limit=limit, offset=offset)
-
+    scenarios = await repo.list_scenarios(
+        status=status_filter, limit=limit, offset=offset
+    )
     return [
         ScenarioItemResponse(
-            scenario_id=s.id,
+            id=s.id,
             scenario_name=s.scenario_name,
             strategy_type=s.strategy_type,
             budget_usd=s.budget_usd,
             status=s.status,
-            created_at=str(s.created_at),
+            created_at=s.created_at,
+            has_results=len(s.results) > 0,
         )
         for s in scenarios
     ]

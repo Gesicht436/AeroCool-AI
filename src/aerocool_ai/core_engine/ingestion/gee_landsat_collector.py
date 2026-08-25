@@ -75,10 +75,10 @@ class LandsatLSTCollector:
                     logger.warning(f"Default GEE initialization deferred: {e}")
                     _GLOBAL_EE_INITIALIZED = False
         except ImportError:
-            logger.warning("Earth Engine API (earthengine-api) is not installed or unavailable.")
+            logger.error("Earth Engine API (earthengine-api) is not installed.")
             _GLOBAL_EE_INITIALIZED = False
         except Exception as exc:
-            logger.warning(f"GEE initialization failed: {exc}. Operating in offline/fallback mode.")
+            logger.error(f"GEE initialization failed: {exc}.")
             _GLOBAL_EE_INITIALIZED = False
 
         return _GLOBAL_EE_INITIALIZED
@@ -103,16 +103,7 @@ class LandsatLSTCollector:
 
     @classmethod
     def decode_qa_cloud_mask(cls, qa_pixel: np.ndarray) -> np.ndarray:
-        """Decode Landsat QA_PIXEL bitmask to identify clear pixels.
-
-        Bit 0: Fill
-        Bit 1: Dilated Cloud
-        Bit 2: Cirrus
-        Bit 3: Cloud
-        Bit 4: Cloud Shadow
-        Bit 5: Snow
-        Bit 7: Water
-        """
+        """Decode Landsat QA_PIXEL bitmask to identify clear pixels."""
         # Bits 1 (dilated cloud), 3 (cloud), 4 (shadow)
         mask = (qa_pixel & (1 << 1)) | (qa_pixel & (1 << 3)) | (qa_pixel & (1 << 4))
         return mask == 0  # True means clear sky
@@ -129,8 +120,10 @@ class LandsatLSTCollector:
         min_lon, min_lat, max_lon, max_lat = bbox
 
         if not self._ee_initialized:
-            logger.warning("GEE not authenticated. Generating synthetic calibration grid for AOI.")
-            return self._generate_synthetic_lst(bbox, start_date, resolution_meters)
+            raise RuntimeError(
+                "Google Earth Engine is not authenticated. Please run 'earthengine authenticate' "
+                "in your terminal or configure GEE_SERVICE_ACCOUNT / GEE_PROJECT_ID in your .env file."
+            )
 
         try:
             import ee
@@ -165,8 +158,9 @@ class LandsatLSTCollector:
             count = merged.size().getInfo()
 
             if count == 0:
-                logger.warning(f"No cloud-free Landsat scenes found between {start_date} and {end_date}.")
-                return self._generate_synthetic_lst(bbox, start_date, resolution_meters)
+                raise RuntimeError(
+                    f"No cloud-free Landsat scenes found for bounding box {bbox} between {start_date} and {end_date}."
+                )
 
             composite = merged.median()
             st_b10 = composite.select("ST_B10")
@@ -194,46 +188,5 @@ class LandsatLSTCollector:
             )
 
         except Exception as exc:
-            logger.error(f"Error querying Landsat GEE: {exc}. Falling back to synthetic simulation.")
-            return self._generate_synthetic_lst(bbox, start_date, resolution_meters)
-
-    def _generate_synthetic_lst(
-        self,
-        bbox: Tuple[float, float, float, float],
-        date: str,
-        resolution_meters: int = 30,
-    ) -> LSTRasterResult:
-        """Generate high-fidelity synthetic urban LST field for testing and offline execution."""
-        min_lon, min_lat, max_lon, max_lat = bbox
-        grid_h, grid_w = 64, 64
-        
-        # Base summer midday temperature ~ 32C with urban hotspot Gaussian anomalies
-        y = np.linspace(-2, 2, grid_h)
-        x = np.linspace(-2, 2, grid_w)
-        xx, yy = np.meshgrid(x, y)
-
-        # Base temperature gradient + urban core heat dome
-        base_temp = 31.5
-        heat_dome = 6.5 * np.exp(-(xx**2 + yy**2) / 1.5)
-        # Commercial / industrial thermal anomalies
-        industrial_hotspot = 4.0 * np.exp(-((xx - 0.8)**2 + (yy - 0.7)**2) / 0.2)
-        # Cool vegetation corridor / water body
-        cool_park = -4.5 * np.exp(-((xx + 0.9)**2 + (yy + 0.6)**2) / 0.4)
-        noise = np.random.normal(0, 0.3, size=(grid_h, grid_w))
-
-        lst_array = base_temp + heat_dome + industrial_hotspot + cool_park + noise
-
-        dx = (max_lon - min_lon) / grid_w
-        dy = -(max_lat - min_lat) / grid_h
-        transform = (min_lon, dx, 0.0, max_lat, 0.0, dy)
-
-        return LSTRasterResult(
-            data=lst_array.astype(np.float32),
-            transform=transform,
-            crs="EPSG:4326",
-            bounds=bbox,
-            timestamp=date,
-            sensor="Landsat-8/9-SyntheticEngine",
-            cloud_cover_percentage=2.5,
-            metadata={"synthetic": True, "grid_shape": [grid_h, grid_w]},
-        )
+            logger.error(f"Error querying Landsat GEE: {exc}")
+            raise RuntimeError(f"Google Earth Engine Landsat query failed: {exc}") from exc

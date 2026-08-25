@@ -26,6 +26,7 @@ dependencies = [
     "pandas>=3.0.5",
     "playwright>=1.62.0",
     "pydantic-settings>=2.15.0",
+    "pyjwt>=2.13.0",
     "pyowm>=3.5.0",
     "pystac-client>=0.9.0",
     "pytest>=9.1.1",

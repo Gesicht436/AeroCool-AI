@@ -21,9 +21,9 @@ src/
     ├── __init__.py              # Package initialization and CLI entrypoint
     ├── config.py                # Pydantic Settings & environment variables
     ├── core_engine/             # Remote Sensing, Preprocessing, PINN & Optimization
-    ├── frontend/                # Streamlit interactive geospatial dashboard
+    ├── frontend/                # React 19 + TypeScript SPA (Cooling Studio & Admin Portal)
     ├── database/                # PostGIS persistence, SQLAlchemy models & repos
-    ├── backend_api/             # FastAPI application, routes, dependencies & schemas
+    ├── backend_api/             # FastAPI application, auth, telemetry, routes & schemas
     └── misc_scripts/            # Database initialization and maintenance utilities
 ```
 

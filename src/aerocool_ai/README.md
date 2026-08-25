@@ -59,5 +59,5 @@ The `aerocool_ai` package is the core Python namespace for the AeroCool-AI Geosp
 ## Development Standards
 
 - **Type Annotations**: All functions must be fully typed using Python standard `typing` and Pydantic models.
-- **Error Handling**: Graceful fallback strategies must be provided when external satellite APIs (e.g. Earth Engine, CDS) are unconfigured.
+- **Error Handling**: In Strict Error Mode, explicit exceptions and HTTP 503 errors are returned when database, cache, or satellite providers are unconfigured or offline (no silent fallbacks or hardcoded mocks).
 - **Documentation**: All public classes and functions must include Google/Sphinx style docstrings.

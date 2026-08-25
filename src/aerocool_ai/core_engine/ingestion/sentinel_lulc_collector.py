@@ -68,93 +68,62 @@ class SentinelLULCCollector:
     ) -> SentinelLULCResult:
         """Fetch Sentinel-2 multispectral surface reflectance and LULC maps for an AOI."""
         min_lon, min_lat, max_lon, max_lat = bbox
-        grid_h, grid_w = 64, 64
 
-        y = np.linspace(-2, 2, grid_h)
-        x = np.linspace(-2, 2, grid_w)
-        xx, yy = np.meshgrid(x, y)
-        dist_from_center = np.sqrt(xx**2 + yy**2)
+        try:
+            import ee
+            ee.Initialize()
+            roi = ee.Geometry.Rectangle([min_lon, min_lat, max_lon, max_lat])
 
-        # Urban center has high built-up density, low NIR, high Red/SWIR
-        # Suburbs have higher vegetation (high NIR, moderate green)
-        # Park corridor has dense trees (very high NIR, low red)
+            # Query Sentinel-2 Harmonized
+            s2 = (
+                ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+                .filterBounds(roi)
+                .filterDate(start_date, end_date)
+                .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold))
+                .median()
+                .divide(10000.0)
+            )
 
-        # Class generation:
-        lulc_grid = np.full((grid_h, grid_w), LULCClass.BUILT_UP_HIGH_DENSITY, dtype=np.uint8)
-        # Suburbs outer ring
-        lulc_grid[dist_from_center > 1.2] = LULCClass.BUILT_UP_RESIDENTIAL
-        lulc_grid[dist_from_center > 1.8] = LULCClass.GRASSLAND
-        # Green corridor
-        park_mask = ((xx + 0.9)**2 + (yy + 0.6)**2) < 0.45
-        lulc_grid[park_mask] = LULCClass.TREES
-        # Water body
-        water_mask = ((xx - 1.2)**2 + (yy + 1.1)**2) < 0.35
-        lulc_grid[water_mask] = LULCClass.WATER
-        # Bare soil patch
-        soil_mask = ((xx - 1.0)**2 + (yy - 1.2)**2) < 0.25
-        lulc_grid[soil_mask] = LULCClass.BARE_SOIL
+            # Sample bands
+            bands_data = s2.select(["B2", "B3", "B4", "B8", "B11", "B12"]).sampleRectangle(region=roi).getInfo()
+            props = bands_data["properties"]
+            blue = np.array(props["B2"], dtype=np.float32)
+            green = np.array(props["B3"], dtype=np.float32)
+            red = np.array(props["B4"], dtype=np.float32)
+            nir = np.array(props["B8"], dtype=np.float32)
+            swir1 = np.array(props["B11"], dtype=np.float32)
+            swir2 = np.array(props["B12"], dtype=np.float32)
 
-        # Multispectral bands reflectance [0.0 - 1.0]
-        # Base built-up reflectance
-        blue = np.full((grid_h, grid_w), 0.12, dtype=np.float32)
-        green = np.full((grid_h, grid_w), 0.14, dtype=np.float32)
-        red = np.full((grid_h, grid_w), 0.18, dtype=np.float32)
-        nir = np.full((grid_h, grid_w), 0.20, dtype=np.float32)
-        swir1 = np.full((grid_h, grid_w), 0.28, dtype=np.float32)
-        swir2 = np.full((grid_h, grid_w), 0.24, dtype=np.float32)
+            grid_h, grid_w = blue.shape
 
-        # Trees
-        tree_idx = lulc_grid == LULCClass.TREES
-        blue[tree_idx] = 0.03
-        green[tree_idx] = 0.08
-        red[tree_idx] = 0.04
-        nir[tree_idx] = 0.58
-        swir1[tree_idx] = 0.12
-        swir2[tree_idx] = 0.05
+            # Query ESA WorldCover
+            wc = ee.ImageCollection("ESA/WorldCover/v100").first().select("Map")
+            wc_data = wc.sampleRectangle(region=roi).getInfo()
+            lulc_grid = np.array(wc_data["properties"]["Map"], dtype=np.uint8)
 
-        # Grassland
-        grass_idx = lulc_grid == LULCClass.GRASSLAND
-        nir[grass_idx] = 0.42
-        red[grass_idx] = 0.08
-        green[grass_idx] = 0.12
+            dx = (max_lon - min_lon) / max(grid_w, 1)
+            dy = -(max_lat - min_lat) / max(grid_h, 1)
+            transform = (min_lon, dx, 0.0, max_lat, 0.0, dy)
 
-        # Water
-        water_idx = lulc_grid == LULCClass.WATER
-        blue[water_idx] = 0.06
-        green[water_idx] = 0.05
-        red[water_idx] = 0.02
-        nir[water_idx] = 0.01
-        swir1[water_idx] = 0.005
-        swir2[water_idx] = 0.002
+            return SentinelLULCResult(
+                blue=blue,
+                green=green,
+                red=red,
+                nir=nir,
+                swir1=swir1,
+                swir2=swir2,
+                lulc_class=lulc_grid,
+                cloud_mask=np.ones((grid_h, grid_w), dtype=bool),
+                transform=transform,
+                crs="EPSG:4326",
+                bounds=bbox,
+                resolution_m=10.0,
+                timestamp=f"{start_date}/{end_date}",
+                metadata={"source": "Sentinel-2A/B-MSI-L2A", "grid_shape": [grid_h, grid_w]},
+            )
 
-        # Add minor natural texture variance
-        noise = np.random.normal(0, 0.005, size=(grid_h, grid_w)).astype(np.float32)
-        blue = np.clip(blue + noise, 0.001, 1.0)
-        green = np.clip(green + noise, 0.001, 1.0)
-        red = np.clip(red + noise, 0.001, 1.0)
-        nir = np.clip(nir + noise, 0.001, 1.0)
-        swir1 = np.clip(swir1 + noise, 0.001, 1.0)
-        swir2 = np.clip(swir2 + noise, 0.001, 1.0)
-
-        dx = (max_lon - min_lon) / grid_w
-        dy = -(max_lat - min_lat) / grid_h
-        transform = (min_lon, dx, 0.0, max_lat, 0.0, dy)
-
-        cloud_mask = np.ones((grid_h, grid_w), dtype=bool)
-
-        return SentinelLULCResult(
-            blue=blue,
-            green=green,
-            red=red,
-            nir=nir,
-            swir1=swir1,
-            swir2=swir2,
-            lulc_class=lulc_grid,
-            cloud_mask=cloud_mask,
-            transform=transform,
-            crs="EPSG:4326",
-            bounds=bbox,
-            resolution_m=10.0,
-            timestamp=f"{start_date}/{end_date}",
-            metadata={"source": "Sentinel-2A/B-MSI-L2A", "grid_shape": [grid_h, grid_w]},
-        )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Sentinel-2 & LULC data provider query failed: {exc}. "
+                "Ensure Google Earth Engine is authenticated via 'earthengine authenticate' or configure GEE credentials in .env."
+            ) from exc

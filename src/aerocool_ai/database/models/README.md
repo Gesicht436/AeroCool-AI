@@ -1,6 +1,6 @@
 # PostGIS SQLAlchemy Declarative Models (`src/aerocool_ai/database/models/`)
 
-This directory contains GeoAlchemy2 and SQLAlchemy 2.0 declarative database models representing spatial layers, simulation runs, impact results, and in-situ meteorological observations.
+This directory contains GeoAlchemy2 and SQLAlchemy 2.0 declarative database models representing spatial layers, simulation runs, impact results, in-situ meteorological observations, user authentication accounts, and real-time telemetry events.
 
 ---
 
@@ -8,6 +8,32 @@ This directory contains GeoAlchemy2 and SQLAlchemy 2.0 declarative database mode
 
 ```mermaid
 erDiagram
+    UserAccount {
+        string id PK
+        string email UK
+        string hashed_password
+        string full_name
+        string role "admin | customer"
+        string organization
+        boolean is_active
+        datetime created_at
+        datetime last_login_at
+    }
+
+    TelemetryEvent {
+        string id PK
+        string endpoint
+        string method
+        int status_code
+        float duration_ms
+        string user_id FK
+        string user_role
+        string ip_address
+        string user_agent
+        string error_message
+        datetime timestamp
+    }
+
     SpatialRasterLayer {
         string id PK
         string layer_name
@@ -87,21 +113,35 @@ erDiagram
 ## Files in this Directory
 
 ### 1. [`__init__.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/__init__.py)
-- **Role**: Exports ORM model entities.
-- **Exports**: `SpatialRasterLayer`, `SpatialVectorFeature`, `SimulationScenario`, `ScenarioResultRecord`, `MeteoObservation`.
+- **Role**: Exports ORM model entities: `UserAccount`, `UserRole`, `TelemetryEvent`, `SpatialRasterLayer`, `SpatialVectorFeature`, `SimulationScenario`, `ScenarioResultRecord`, `MeteoObservation`.
 
 ---
 
-### 2. [`spatial_layers.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/spatial_layers.py)
+### 2. [`users.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/users.py)
+- **Role**: User authentication accounts and RBAC roles.
+- **Models**:
+  - `UserRole`: Enum for user permission levels (`ADMIN`, `CUSTOMER`).
+  - `UserAccount`: Stores unique email, PBKDF2 hashed password, full name, role, municipal organization, active status flag, and login audit timestamps.
+
+---
+
+### 3. [`telemetry.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/telemetry.py)
+- **Role**: API telemetry and request performance event logs.
+- **Models**:
+  - `TelemetryEvent`: Stores request endpoint, HTTP method, status code, latency in milliseconds, user identity, IP address, user agent, and timestamp.
+  - Indexed on `(endpoint, timestamp)` and `timestamp` for fast dashboard analytics.
+
+---
+
+### 4. [`spatial_layers.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/spatial_layers.py)
 - **Role**: Spatial raster catalog and vector feature tables.
 - **Models**:
   - `SpatialRasterLayer`: Stores raster metadata, bounding polygons (`Geometry('POLYGON', srid=4326)`), resolution, timestamp, and cloud storage URIs.
-    - Composite index on `(layer_type, timestamp)`.
   - `SpatialVectorFeature`: Stores vector geometries (building footprints, street polygons, land parcels) with biophysical attributes (`height_m`, `albedo`, `fvc`, `plan_area_m2`).
 
 ---
 
-### 3. [`scenario_results.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/scenario_results.py)
+### 5. [`scenario_results.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/scenario_results.py)
 - **Role**: Simulation configuration and computed impact logs.
 - **Models**:
   - `SimulationScenario`: Represents an urban cooling simulation run with user-defined target bounding polygon (`Geometry('POLYGON', srid=4326)`), strategy type, budget, and lifecycle status (`pending`, `running`, `completed`, `failed`).
@@ -109,8 +149,7 @@ erDiagram
 
 ---
 
-### 4. [`sensor_meteo.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/sensor_meteo.py)
+### 6. [`sensor_meteo.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/sensor_meteo.py)
 - **Role**: In-situ weather station logs for PINN model assimilation.
 - **Models**:
   - `MeteoObservation`: Stores sensor spatial coordinates (`Geometry('POINT', srid=4326)`), observation time, air temperature, solar flux, wind speed, relative humidity, and barometric pressure.
-  - Composite index on `(station_id, observation_time)`.

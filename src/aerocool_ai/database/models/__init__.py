@@ -9,6 +9,8 @@ from aerocool_ai.database.models.spatial_layers import (
     SpatialRasterLayer,
     SpatialVectorFeature,
 )
+from aerocool_ai.database.models.telemetry import TelemetryEvent
+from aerocool_ai.database.models.users import UserAccount, UserRole
 
 __all__ = [
     "SpatialRasterLayer",
@@ -16,4 +18,7 @@ __all__ = [
     "SimulationScenario",
     "ScenarioResultRecord",
     "MeteoObservation",
+    "UserAccount",
+    "UserRole",
+    "TelemetryEvent",
 ]

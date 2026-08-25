@@ -27,6 +27,8 @@ This directory contains administrative and migration scripts for database initia
      - `simulation_scenarios`
      - `scenario_results`
      - `meteo_observations`
+     - `users`
+     - `telemetry_events`
 - **Usage**:
   ```bash
   # Execute via uv runner

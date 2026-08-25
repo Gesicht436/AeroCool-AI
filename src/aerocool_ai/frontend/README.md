@@ -34,29 +34,37 @@ src/aerocool_ai/frontend/
     ├── main.tsx              # React DOM root mounting
     ├── App.tsx               # Root application shell, state management & print triggers
     ├── index.css             # Tailwind base styles & glassmorphic utilities
-    ├── types/                # TypeScript interfaces (Hotspots, Simulations, Pareto, Presets)
+    ├── context/              # Authentication & user state context
+    │   └── AuthContext.tsx   # JWT session storage, login/logout, and demo profile switcher
+    ├── types/                # TypeScript interfaces (Hotspots, Simulations, Pareto, Auth, Telemetry)
     │   └── index.ts
     ├── services/             # API client service for FastAPI backend
     │   └── api.ts
     └── components/           # Modular React components
-        ├── Header.tsx        # Glassmorphic header, status badge, city preset & currency toggle
+        ├── Header.tsx        # Glassmorphic header, status badge, city preset, role switcher & auth modal triggers
         ├── MetricCards.tsx   # Top KPI metrics (Baseline LST, Peak Temp, Hotspot Area)
         ├── HotspotMap.tsx    # Leaflet map with dark/satellite tiles, layer switcher & popups
         ├── SimulationPanel.tsx # Parametric cooling intervention sliders & thermodynamic KPIs
         ├── ScenarioComparison.tsx # Head-to-head A/B microclimate policy comparison
         ├── ParetoChart.tsx   # Recharts Pareto investment efficiency frontier
-        └── PhysicsPanel.tsx  # Surface Energy Balance & PINN explainers
+        ├── PhysicsPanel.tsx  # Surface Energy Balance & PINN explainers
+        ├── LoginModal.tsx    # Glassmorphic modal with 1-click instant demo profiles & sign-in forms
+        └── AdminDashboard.tsx # Real-time API telemetry gauges, audit log stream & user directory
 ```
 
 ---
 
 ## Key Features
 
-1. **Indian City Presets & Regional Profiles**: Instant geospatial bounding boxes and climate zone diagnostics for Delhi NCR, Noida, Mumbai BKC, Nagpur, Bengaluru, and Ahmedabad.
-2. **Dual Currency Toggle (₹ INR / $ USD)**: Live conversion (1 USD = ₹83.5 INR) formatted in Lakhs/Crores for municipal budget planners.
-3. **Head-to-Head A/B Scenario Comparison**: Evaluate two cooling strategies (e.g. *Cool Roofs* vs *Urban Tree Canopies*) at equivalent capital expenditure with detailed thermodynamic trade-offs.
-4. **Printable Municipal Heat Action Plan**: One-click summary export formatted for municipal climate response reports.
-5. **Code-Split Optimized Bundle**: Sub-220 kB initial JavaScript payload via Rollup manual chunks (`react-vendor`, `leaflet-vendor`, `recharts-vendor`).
+1. **Role-Based Portals (Customer vs Admin)**:
+   - 🏛️ **Customer / Climate Planner**: Geospatial UHI maps, parametric simulations, Pareto curves, and printable Heat Action Plans.
+   - 👑 **Administrator**: Full access to planning tools **plus** live telemetry KPIs (P95 latency, requests/sec, cache efficiency), streaming API audit inspector, and user account directory.
+2. **1-Click Instant Demo Login**: Switch between `Admin User` and `Customer User` instantly with zero friction.
+3. **Indian City Presets & Regional Profiles**: Instant geospatial bounding boxes and climate zone diagnostics for Delhi NCR, Noida, Mumbai BKC, Nagpur, Bengaluru, and Ahmedabad.
+4. **Dual Currency Toggle (₹ INR / $ USD)**: Live conversion (1 USD = ₹83.5 INR) formatted in Lakhs/Crores for municipal budget planners.
+5. **Head-to-Head A/B Scenario Comparison**: Evaluate two cooling strategies (e.g. *Cool Roofs* vs *Urban Tree Canopies*) at equivalent capital expenditure with detailed thermodynamic trade-offs.
+6. **Printable Municipal Heat Action Plan**: One-click summary export formatted for municipal climate response reports.
+7. **Code-Split Optimized Bundle**: Sub-245 kB initial JavaScript payload via Rollup manual chunks (`react-vendor`, `leaflet-vendor`, `recharts-vendor`, `lucide-vendor`).
 
 ---
 
@@ -78,10 +86,11 @@ npm.cmd run dev
 ---
 
 ### Option 2: Unified Full-Stack via FastAPI (Port 8000)
-The pre-compiled production bundle in `dist/` is mounted automatically inside FastAPI:
 ```bash
-# Start backend server from project root
+# Build production bundle
+cd src/aerocool_ai/frontend && npm.cmd run build
+
+# Start FastAPI server (serves the React SPA at /dashboard)
 uv run uvicorn aerocool_ai.backend_api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-- Open React Dashboard: **[http://localhost:8000/dashboard](http://localhost:8000/dashboard)**
-- Open Swagger API Docs: **[http://localhost:8000/docs](http://localhost:8000/docs)**
+- Open in browser: **[http://localhost:8000/dashboard](http://localhost:8000/dashboard)**

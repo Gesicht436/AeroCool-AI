@@ -9,6 +9,7 @@ The `database` package manages all relational, time-series, and spatial persiste
 1. **Fully Asynchronous**: All database sessions, queries, and transactions utilize non-blocking async/await semantics via the high-performance `asyncpg` driver.
 2. **First-Class Spatial Support**: Geometries are indexed and queried using PostGIS spatial functions (`ST_Intersects`, `ST_MakeEnvelope`, `ST_Within`).
 3. **Clean Repository Pattern**: All SQL queries are encapsulated within dedicated repository classes, keeping business and routing logic independent of ORM specifics.
+4. **Strict Persistence & Error Propagation**: Endpoints directly persist to PostGIS and return explicit 503 errors if PostgreSQL is unavailable (no silent fallbacks or hardcoded data).
 
 ---
 
@@ -16,7 +17,7 @@ The `database` package manages all relational, time-series, and spatial persiste
 
 ### 1. [`__init__.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/__init__.py)
 - **Role**: Exports public connection helpers and ORM model classes.
-- **Exports**: `Base`, `get_engine`, `get_session_factory`, `get_async_session`, `close_db_connection`, `SpatialRasterLayer`, `SpatialVectorFeature`, `SimulationScenario`, `ScenarioResultRecord`, `MeteoObservation`.
+- **Exports**: `Base`, `get_engine`, `get_session_factory`, `get_async_session`, `close_db_connection`, `UserAccount`, `UserRole`, `TelemetryEvent`, `SpatialRasterLayer`, `SpatialVectorFeature`, `SimulationScenario`, `ScenarioResultRecord`, `MeteoObservation`.
 
 ---
 
@@ -28,14 +29,6 @@ The `database` package manages all relational, time-series, and spatial persiste
   - `get_session_factory(settings)`: Singleton `async_sessionmaker[AsyncSession]` bound to the async engine.
   - `get_async_session()`: Async generator function yielding transactional database sessions with automatic commit/rollback handling.
   - `close_db_connection()`: Graceful disposal of database connection pools during application shutdown.
-- **Usage Example**:
-  ```python
-  from aerocool_ai.database.connection import get_async_session
-
-  async for session in get_async_session():
-      # Use transactional session
-      result = await session.execute(...)
-  ```
 
 ---
 
@@ -43,14 +36,14 @@ The `database` package manages all relational, time-series, and spatial persiste
 
 | Submodule | Description |
 |---|---|
-| [`models/`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/README.md) | GeoAlchemy2 declarative table definitions for spatial raster catalogs, vector features, scenario runs, and meteorological logs. |
-| [`repositories/`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/repositories/README.md) | Asynchronous query operations for spatial bounding box intersections, layer indexing, and simulation history management. |
+| [`models/`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/models/README.md) | GeoAlchemy2 declarative table definitions for user accounts, telemetry events, spatial raster catalogs, vector features, scenario runs, and meteorological logs. |
+| [`repositories/`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/database/repositories/README.md) | Asynchronous query operations for user authentication, live telemetry streaming, spatial bounding box intersections, and simulation history management. |
 
 ---
 
 ## Database Migration & Setup
 
-To provision the PostGIS spatial extensions and tables:
+To provision the PostGIS spatial extensions, ORM tables, and seed default demo accounts:
 
 ```bash
 uv run python -m aerocool_ai.misc_scripts.initialize_postgis
