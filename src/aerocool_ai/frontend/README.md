@@ -4,6 +4,30 @@ This directory contains the production web client for **AeroCool-AI**, built wit
 
 ---
 
+## 🌟 Quick Primer for Juniors: How the Frontend Works
+
+If you are a junior frontend or full-stack developer joining the project, here is how the application is organized:
+
+### 1. Data Flow in 4 Steps
+```mermaid
+flowchart LR
+    A["1. City Preset Selected (e.g. Delhi NCR)"] --> B["2. Leaflet Map Bounding Box"]
+    B --> C["3. FastAPI Backend: POST /hotspots/detect"]
+    C --> D["4. GeoJSON Heat Hotspots Rendered on Dark Matter Tiles"]
+    D --> E["5. User adjusts sliders -> POST /simulation/run"]
+```
+
+1. **City Selection**: The user picks an Indian city preset from the header (e.g., *Delhi NCR*, *Mumbai BKC*, *Bengaluru*), which centers the Leaflet map and computes the target bounding box `bbox`.
+2. **Hotspot Detection**: The app queries `/api/v1/hotspots/detect`. The backend downloads Landsat/Sentinel satellite data in real-time, runs thermodynamic feature extraction, and returns a standard RFC 7946 GeoJSON `FeatureCollection`.
+3. **Interactive Map**: Leaflet renders hotspot parcels color-coded by temperature anomaly (yellow $\sim 2^\circ\text{C}$ up to deep red $\sim 8^\circ\text{C}$). Clicking any hotspot opens a diagnostic card.
+4. **Parametric Simulation**: The user tests cooling strategies (*Green Roofs*, *Cool Roofs*, *Urban Canopies*) with interactive sliders. The simulation calculates avoided HVAC kilowatt-hours, carbon emissions avoided, and financial payback in seconds.
+
+### 2. State Management & Authentication Architecture
+- `<AuthProvider>`: Wraps `<App />` at the root (`main.tsx`). It manages the active JWT bearer token in browser `localStorage`, tracks the user's role (`customer` vs `admin`), and injects authorization headers automatically.
+- **1-Click Demo Switcher**: Click the user profile icon in the top right to switch between **Planner** (`planner@aerocool.ai`) and **Admin** (`admin@aerocool.ai`) with a single click.
+
+---
+
 ## Tech Stack & Architecture
 
 | Framework / Tool | Version / Purpose |

@@ -4,6 +4,32 @@ The `optimization` submodule translates diagnostic heat data into actionable mun
 
 ---
 
+## 🌟 Quick Primer for Juniors: What is Spatial Allocation?
+
+If you are new to urban planning and mathematical optimization, here is the problem we solve:
+
+### 1. The Municipal Dilemma (The Knapsack Analogy)
+Imagine a city mayor gives you a fixed budget of **$250,000** (or **₹2 Crore**) to fight extreme urban heat.
+- Should you paint every roof white? (Cheap, high reflection, but doesn't add moisture or shade).
+- Should you build extensive green sedum roofs? (Cools via evapotranspiration, but costs 4x more per square meter).
+- Should you plant urban tree canopies? (Provides critical shade and blocks sunlight, but takes space and has maintenance costs).
+
+You cannot do everything everywhere. Every city parcel has:
+- A different **baseline temperature** (some areas are blazing at $46^\circ\text{C}$, others are cooler at $36^\circ\text{C}$).
+- A different **heat vulnerability index (HVI)** (areas with dense low-income elderly populations suffer far more from extreme heat than industrial zones).
+- A different **cost per square meter**.
+
+### 2. How the Spatial Allocation Solver Works
+Our `SpatialAllocationSolver` models this as a **Multi-Choice Knapsack Problem** / **Mixed-Integer Linear Program (MILP)**:
+$$\max \sum_{i, k} (\Delta T_{i, k} \times \text{HVI}_i \times \text{Area}_{i, k}) \cdot x_{i,k} \quad \text{subject to} \quad \sum_{i, k} c_k \cdot x_{i, k} \le \text{Budget}$$
+It picks the exact combination of parcels and intervention types that yields the maximum possible temperature drop for every dollar spent.
+
+### 3. What is the Pareto Frontier?
+If you spend $50,000, you cool the worst hotspots. If you spend $250,000, you achieve significant city-wide cooling. But if you spend $2,000,000, you hit **diminishing returns** (the cooling curve flattens out).
+The **Pareto Frontier** plots this tradeoff curve and automatically identifies the **"knee point"**—the mathematically recommended budget where municipal planners get the highest cooling return on their investment.
+
+---
+
 ## Files in this Directory
 
 ### 1. [`__init__.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/core_engine/optimization/__init__.py)

@@ -4,6 +4,28 @@ The `preprocessing` submodule bridges multi-resolution Earth observation data an
 
 ---
 
+## 🌟 Quick Primer for Juniors: Why Preprocess Satellite Rasters?
+
+If you are new to satellite remote sensing and GIS data, here is why preprocessing is essential:
+
+### 1. The Multi-Resolution Puzzle
+Different satellites look at the Earth with completely different "camera lenses":
+- **Sentinel-2** captures visible and near-infrared light at sharp **10-meter** pixels.
+- **Landsat 8/9** captures thermal infrared radiation (surface temperature) at **30-meter** pixels.
+- **ERA5-Land** gives us atmospheric air temperature and wind speed at coarse **10-kilometer** (0.1°) cells.
+- **OpenStreetMap** provides building footprints as geometric vector polygons.
+
+A neural network cannot process images where one channel is a 1000x1000 grid and another is a 10x10 grid.
+Our `SpatialAlignmentPipeline` resamples and projects every layer onto the exact same spatial grid (like projecting different overhead transparencies onto the same screen) so that pixel $(i, j)$ represents the exact same physical patch of ground across all layers.
+
+### 2. Key Biophysical Indices in Plain English
+- **NDVI (Normalized Difference Vegetation Index)**: Measures **green vegetation density**. Leaves reflect Near-Infrared (NIR) and absorb Red light. High NDVI ($> 0.5$) means dense trees/grass; low NDVI means asphalt or bare dirt.
+- **NDBI (Normalized Difference Built-up Index)**: Measures **man-made concrete and buildings**. Concrete reflects SWIR light strongly. High NDBI indicates heavy urban sprawl.
+- **Albedo ($\alpha$)**: Measures **surface reflectivity** ("shininess"). White roofs have high albedo ($\sim 0.70$); black asphalt has low albedo ($\sim 0.10$). Low albedo absorbs solar heat.
+- **SVF (Sky View Factor)**: Measures **how much open sky is visible from street level**. In deep skyscraper street canyons, SVF is low ($\sim 0.2$), trapping trapped thermal radiation like an oven. In open plazas, SVF is high ($\sim 0.9$).
+
+---
+
 ## Files in this Directory
 
 ### 1. [`__init__.py`](file:///C:/Users/mayan/Development/Projects/AeroCool-AI/src/aerocool_ai/core_engine/preprocessing/__init__.py)

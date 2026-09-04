@@ -10,6 +10,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from aerocool_ai.backend_api.auth import decode_access_token
+from aerocool_ai.database.connection import get_session_factory
 from aerocool_ai.database.repositories.telemetry_repository import TelemetryRepository
 
 logger = logging.getLogger(__name__)
@@ -48,23 +49,26 @@ class TelemetryMiddleware(BaseHTTPMiddleware):
 
             # Exclude asset static files to avoid cluttering telemetry logs
             path = request.url.path
-            if not path.startswith("/assets") and not path.endswith((".js", ".css", ".ico", ".png", ".jpg")):
-                telemetry_repo = TelemetryRepository()
+            if not path.startswith(("/assets", "/docs", "/redoc", "/openapi.json")) and not path.endswith((".js", ".css", ".ico", ".png", ".jpg")):
                 client_ip = request.client.host if request.client else None
                 user_agent = request.headers.get("user-agent")
 
                 try:
-                    await telemetry_repo.log_event(
-                        endpoint=path,
-                        method=request.method,
-                        status_code=status_code,
-                        duration_ms=duration_ms,
-                        user_id=user_id,
-                        user_role=user_role,
-                        ip_address=client_ip,
-                        user_agent=user_agent,
-                        error_message=error_message,
-                    )
+                    session_factory = get_session_factory()
+                    async with session_factory() as session:
+                        async with session.begin():
+                            telemetry_repo = TelemetryRepository(session)
+                            await telemetry_repo.log_event(
+                                endpoint=path,
+                                method=request.method,
+                                status_code=status_code,
+                                duration_ms=duration_ms,
+                                user_id=user_id,
+                                user_role=user_role,
+                                ip_address=client_ip,
+                                user_agent=user_agent,
+                                error_message=error_message,
+                            )
                 except Exception as log_err:
                     logger.debug(f"Telemetry log failed: {log_err}")
 

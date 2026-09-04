@@ -39,8 +39,11 @@ def test_ecostress_collector_strict_error_unauthenticated():
         collector.fetch_diurnal_passes(bbox, "2026-07-15", target_hours=[9.0, 14.0])
 
 
-def test_sentinel_lulc_collector_strict_error():
-    """Test Sentinel-2 collector raises strict error when provider is unconfigured."""
+def test_sentinel_lulc_collector_strict_error(monkeypatch):
+    """Test Sentinel-2 collector raises strict error when provider fails or is unreachable."""
+    import ee
+    from unittest.mock import MagicMock
+    monkeypatch.setattr(ee, "ImageCollection", MagicMock(side_effect=Exception("GEE API Connection Error")))
     collector = SentinelLULCCollector()
     bbox = (-74.02, 40.70, -73.95, 40.78)
     with pytest.raises(RuntimeError, match="Sentinel-2 & LULC data provider query failed"):

@@ -27,9 +27,9 @@ async def test_hotspot_detection_endpoint():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {
-            "bbox": [-74.02, 40.70, -73.95, 40.78],
-            "start_date": "2026-06-01",
-            "end_date": "2026-08-31",
+            "bbox": [77.10, 28.58, 77.26, 28.72],
+            "start_date": "2026-05-01",
+            "end_date": "2026-06-30",
             "min_temp_anomaly_celsius": 2.0,
             "resolution_meters": 30,
         }
@@ -59,7 +59,7 @@ async def test_optimization_allocation_endpoint():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {
-            "bbox": [-74.02, 40.70, -73.95, 40.78],
+            "bbox": [77.10, 28.58, 77.26, 28.72],
             "budget_usd": 250000.0,
             "allowed_strategies": ["cool_roof", "green_roof", "urban_canopy"],
         }
@@ -77,7 +77,7 @@ async def test_pareto_frontier_endpoint():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {
-            "bbox": [-74.02, 40.70, -73.95, 40.78],
+            "bbox": [77.10, 28.58, 77.26, 28.72],
             "budget_usd": 500000.0,
         }
         response = await client.post("/api/v1/optimization/pareto", json=payload)
@@ -111,7 +111,7 @@ async def test_simulation_run_endpoint_with_mock_db():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {
             "scenario_name": "Test Run",
-            "bbox": [-74.02, 40.70, -73.95, 40.78],
+            "bbox": [77.10, 28.58, 77.26, 28.72],
             "strategy_type": "green_roof",
             "target_area_fraction": 0.50,
             "budget_usd": 100000.0,

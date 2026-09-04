@@ -4,6 +4,24 @@ The `database` package manages all relational, time-series, and spatial persiste
 
 ---
 
+## 🌟 Quick Primer for Juniors: What is PostGIS?
+
+If you are accustomed to standard relational SQL databases, here is why we use **PostGIS**:
+
+### 1. Spatial Superpowers for SQL
+Standard SQL knows about numbers, strings, and dates, but it has no idea what a "polygon", "bounding box", or "distance in meters" is.
+**PostGIS** is an extension for PostgreSQL that adds spatial geometries (`Point`, `Polygon`, `MultiPolygon`) and coordinate reference systems (like `EPSG:4326` latitude/longitude).
+
+### 2. Spatial Indexing (R-Trees)
+If a city has 500,000 buildings and you want to find the ones inside a neighborhood bounding box, standard SQL would have to inspect all 500,000 rows one-by-one.
+PostGIS uses **R-Tree Spatial Indices** (Bounding Box Trees). It can filter through millions of spatial geometries and find the buildings intersecting your target polygon in just **2 to 5 milliseconds** using the `ST_Intersects` operator:
+```sql
+SELECT id, height_m FROM spatial_vector_features 
+WHERE ST_Intersects(geometry, ST_MakeEnvelope(77.10, 28.58, 77.26, 28.72, 4326));
+```
+
+---
+
 ## Architectural Principles
 
 1. **Fully Asynchronous**: All database sessions, queries, and transactions utilize non-blocking async/await semantics via the high-performance `asyncpg` driver.

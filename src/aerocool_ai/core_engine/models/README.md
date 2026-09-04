@@ -1,10 +1,33 @@
 # Physics-Informed Machine Learning & Regressors (`src/aerocool_ai/core_engine/models/`)
 
-The `models` submodule contains empirical machine learning benchmarks and the core **Physics-Informed Neural Network (PINN)** that enforces conservation laws across urban microclimates.
+The `models` submodule contains empirical machine learning benchmarks and the core **Physics-Informed Neural Network (PINN)** that enforces thermodynamic conservation laws across urban microclimates.
 
 ---
 
-## Architectural Principles
+## 🌟 Quick Primer for Juniors: What is a PINN?
+
+If you are new to Physics-Informed Machine Learning, here is the basic intuition:
+
+### The Problem with Normal Machine Learning
+Imagine training a standard neural network or XGBoost model on satellite thermal imagery. If you feed it satellite data from a heatwave, it might predict that a dark asphalt parking lot will reach $65^\circ\text{C}$. But if you simulate a cooling intervention (like a cool roof or urban park), standard ML models have no concept of physical laws—they might predict that temperature drops to $-10^\circ\text{C}$ or that heat disappears without anywhere for that energy to go. In physics, **energy cannot be created or destroyed**.
+
+### How AeroCool's PINN Fixes This: The Thermodynamic "Balance Sheet"
+Think of the urban ground surface like a financial balance sheet:
+- **Income (Heat In)**: Sunlight hitting the pavement ($R_{sw\downarrow}$) + warm infrared atmospheric radiation ($R_{lw\downarrow}$).
+- **Expenses (Heat Out)**:
+  1. **Sensible Heat ($H$)**: Heat warming up the ambient air that you feel on your skin.
+  2. **Latent Heat ($\lambda E$)**: Heat absorbed by trees and water evaporating moisture (evaporative cooling).
+  3. **Radiated Heat ($R_{lw\uparrow}$)**: Infrared heat beamed back up into the sky.
+  4. **Conduction Storage ($G$)**: Heat conducted deep down into asphalt and concrete.
+
+Under the **Surface Energy Balance (SEB)** law, the balance sheet must sum to zero:
+$$\mathcal{R}_{\text{SEB}} = R_n - G - H - \lambda E = 0$$
+
+In our PINN, whenever the neural network makes a prediction that breaks this law, our custom loss function penalizes it severely. As a result, the model is physically constrained: it cannot hallucinate unphysical temperatures.
+
+---
+
+## Architectural Principles & Tensor Graph
 
 Standard black-box neural networks often predict physically impossible surface temperatures (e.g., negative heat fluxes or violations of energy conservation). AeroCool-AI uses a **Physics-Informed Neural Network (PINN)** that incorporates first-principles thermodynamic constraints directly into the loss function.
 

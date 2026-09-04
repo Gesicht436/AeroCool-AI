@@ -4,6 +4,30 @@ This directory contains the FastAPI endpoint route handlers partitioned by domai
 
 ---
 
+## 🌟 Quick Primer for Juniors: Routes & Role-Based Access Control (RBAC)
+
+If you are new to FastAPI and backend APIs, here is how our routing works:
+
+### 1. What is a Route Controller?
+Think of each route file as an airport desk handling a specific department:
+- `auth.py`: Issues passport visas (JWT tokens) when users register or log in.
+- `hotspots.py`: Scans the city for thermal anomalies using satellite imagery.
+- `simulation.py`: Runs "what-if" thermodynamic experiments for urban cooling.
+- `optimization.py`: Solves budget knapsack optimization and generates Pareto curves.
+- `admin.py`: The control tower inspecting server latency, request logs, and system health.
+
+### 2. How Role-Based Access Control (RBAC) Works
+We protect administrative endpoints using FastAPI's `Depends()` dependency injection:
+```python
+@router.get("/admin/telemetry")
+async def get_telemetry(admin_user: UserAccount = Depends(require_admin)):
+    ...
+```
+- `Depends(require_admin)` acts like a bouncer: it inspects the HTTP `Authorization: Bearer <token>` header, decodes the user's role, and verifies whether `role == "admin"`.
+- If a regular `customer` attempts to access an `/admin` endpoint, FastAPI automatically responds with an explicit `403 Forbidden` error.
+
+---
+
 ## Endpoint Summary
 
 ```mermaid

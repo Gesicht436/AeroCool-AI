@@ -48,8 +48,8 @@ class LandsatLSTCollector:
     def _initialize_ee(self) -> bool:
         """Authenticate and initialize the Earth Engine client."""
         global _GLOBAL_EE_INITIALIZED
-        if _GLOBAL_EE_INITIALIZED is not None:
-            return _GLOBAL_EE_INITIALIZED
+        if _GLOBAL_EE_INITIALIZED is True:
+            return True
 
         try:
             import ee
@@ -162,14 +162,23 @@ class LandsatLSTCollector:
                     f"No cloud-free Landsat scenes found for bounding box {bbox} between {start_date} and {end_date}."
                 )
 
-            composite = merged.median()
-            st_b10 = composite.select("ST_B10")
-            # Apply scaling: K -> C
-            lst_celsius = st_b10.multiply(self.SCALE_FACTOR).add(self.OFFSET).add(self.KELVIN_TO_CELSIUS)
+            # Calculate dynamic sampling scale to avoid Earth Engine 262,144 pixel overflow
+            lat_mid = (min_lat + max_lat) / 2.0
+            width_m = abs(max_lon - min_lon) * 111320.0 * float(np.cos(np.radians(lat_mid)))
+            height_m = abs(max_lat - min_lat) * 110540.0
+            max_dim_m = max(width_m, height_m)
+            effective_scale = max(float(resolution_meters), max_dim_m / 256.0)
 
-            # Sample region
-            pixel_array = lst_celsius.sampleRectangle(region=roi, defaultValue=np.nan).getInfo()
-            data = np.array(pixel_array["properties"]["ST_B10"], dtype=np.float32)
+            composite = merged.median()
+            st_b10 = composite.select("ST_B10").reproject(crs="EPSG:4326", scale=effective_scale)
+
+            # Sample region using integer defaultValue=0 for native ST_B10 band
+            pixel_array = st_b10.sampleRectangle(region=roi, defaultValue=0).getInfo()
+            raw_dn = np.array(pixel_array["properties"]["ST_B10"], dtype=np.float32)
+
+            # Radiometric scaling: DN -> Kelvin -> Celsius
+            data = raw_dn * self.SCALE_FACTOR + self.OFFSET + self.KELVIN_TO_CELSIUS
+            data[raw_dn == 0] = np.nan
 
             h, w = data.shape
             dx = (max_lon - min_lon) / max(w, 1)

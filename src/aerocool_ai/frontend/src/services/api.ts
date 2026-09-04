@@ -60,7 +60,7 @@ export async function runSimulation(
       scenario_name: `Intervention-${strategyType.toUpperCase()}`,
       bbox,
       strategy_type: strategyType,
-      target_coverage_fraction: targetCoverage,
+      target_area_fraction: targetCoverage,
       budget_usd: budgetUsd,
     }),
   });
@@ -80,7 +80,7 @@ export async function fetchParetoFrontier(
     body: JSON.stringify({
       bbox,
       budget_usd: budgetUsd,
-      candidate_strategies: ['green_roof', 'cool_roof', 'urban_canopy', 'cool_pavement'],
+      allowed_strategies: ['green_roof', 'cool_roof', 'urban_canopy', 'cool_pavement'],
     }),
   });
   if (!res.ok) {

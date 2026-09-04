@@ -58,6 +58,26 @@ class SentinelLULCCollector:
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self.settings = settings or get_settings()
+        self._initialize_ee()
+
+    def _initialize_ee(self) -> bool:
+        """Authenticate and initialize the Earth Engine client."""
+        try:
+            import ee
+            if self.settings.gee_service_account and self.settings.gee_private_key_file:
+                credentials = ee.ServiceAccountCredentials(
+                    self.settings.gee_service_account,
+                    self.settings.gee_private_key_file,
+                )
+                ee.Initialize(credentials=credentials)
+            elif self.settings.gee_project_id:
+                ee.Initialize(project=self.settings.gee_project_id)
+            else:
+                ee.Initialize()
+            return True
+        except Exception as exc:
+            logger.debug(f"Sentinel GEE initialization info: {exc}")
+            return False
 
     def fetch_multispectral_and_lulc(
         self,
@@ -71,7 +91,7 @@ class SentinelLULCCollector:
 
         try:
             import ee
-            ee.Initialize()
+            self._initialize_ee()
             roi = ee.Geometry.Rectangle([min_lon, min_lat, max_lon, max_lat])
 
             # Query Sentinel-2 Harmonized
@@ -84,8 +104,17 @@ class SentinelLULCCollector:
                 .divide(10000.0)
             )
 
-            # Sample bands
-            bands_data = s2.select(["B2", "B3", "B4", "B8", "B11", "B12"]).sampleRectangle(region=roi).getInfo()
+            lat_mid = (min_lat + max_lat) / 2.0
+            width_m = abs(max_lon - min_lon) * 111320.0 * float(np.cos(np.radians(lat_mid)))
+            height_m = abs(max_lat - min_lat) * 110540.0
+            max_dim_m = max(width_m, height_m)
+            effective_scale = max(20.0, max_dim_m / 256.0)
+
+            # Sample bands with dynamic scale
+            s2_bands = s2.select(["B2", "B3", "B4", "B8", "B11", "B12"]).reproject(
+                crs="EPSG:4326", scale=effective_scale
+            )
+            bands_data = s2_bands.sampleRectangle(region=roi, defaultValue=0).getInfo()
             props = bands_data["properties"]
             blue = np.array(props["B2"], dtype=np.float32)
             green = np.array(props["B3"], dtype=np.float32)
@@ -96,9 +125,14 @@ class SentinelLULCCollector:
 
             grid_h, grid_w = blue.shape
 
-            # Query ESA WorldCover
-            wc = ee.ImageCollection("ESA/WorldCover/v100").first().select("Map")
-            wc_data = wc.sampleRectangle(region=roi).getInfo()
+            # Query ESA WorldCover with matching scale
+            wc = (
+                ee.ImageCollection("ESA/WorldCover/v100")
+                .first()
+                .select("Map")
+                .reproject(crs="EPSG:4326", scale=effective_scale)
+            )
+            wc_data = wc.sampleRectangle(region=roi, defaultValue=0).getInfo()
             lulc_grid = np.array(wc_data["properties"]["Map"], dtype=np.uint8)
 
             dx = (max_lon - min_lon) / max(grid_w, 1)

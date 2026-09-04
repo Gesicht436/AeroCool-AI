@@ -5,6 +5,7 @@ Manages scoped database sessions, caching clients, user authentication, and conf
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import AsyncGenerator, Optional
 
@@ -33,38 +34,29 @@ async def get_db(
     yield session
 
 
-_redis_client = None
-
-
 async def get_redis_client(
     settings: Settings = Depends(get_app_settings),
 ):
     """Dependency provider for async Redis client in strict mode."""
-    global _redis_client
-    if _redis_client is None:
-        try:
-            import redis.asyncio as aioredis
+    try:
+        import redis.asyncio as aioredis
 
-            client = aioredis.from_url(
-                settings.effective_redis_url,
-                encoding="utf-8",
-                decode_responses=True,
-            )
-            # Verify Redis connectivity
-            await client.ping()
-            _redis_client = client
-            logger.info("Connected to Redis cache server.")
-        except Exception as exc:
-            logger.error(f"Redis connection failed: {exc}")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=(
-                    f"Redis cache server unreachable ({exc}). "
-                    f"Please verify Redis is running at {settings.effective_redis_url} or launch via 'docker compose up -d redis'."
-                ),
-            )
-
-    return _redis_client
+        client = aioredis.from_url(
+            settings.effective_redis_url,
+            encoding="utf-8",
+            decode_responses=True,
+        )
+        await client.ping()
+        return client
+    except Exception as exc:
+        logger.error(f"Redis connection failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"Redis cache server unreachable ({exc}). "
+                f"Please verify Redis is running at {settings.effective_redis_url} or launch via 'docker compose up -d redis'."
+            ),
+        )
 
 
 async def get_user_repository(

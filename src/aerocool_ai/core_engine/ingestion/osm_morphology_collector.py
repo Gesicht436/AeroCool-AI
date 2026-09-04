@@ -60,7 +60,7 @@ class OSMMorphologyCollector:
 
             ox.settings.use_cache = True
             ox.settings.log_console = False
-            ox.settings.requests_timeout = 10
+            ox.settings.requests_timeout = 60
 
             poly = box(min_lon, min_lat, max_lon, max_lat)
             gdf = ox.features_from_polygon(poly, tags={"building": True})
@@ -108,31 +108,29 @@ class OSMMorphologyCollector:
         if "geometry" in gdf.columns:
             gdf["calc_height"] = gdf.apply(parse_height, axis=1)
 
-            lon_step = (max_lon - min_lon) / grid_w
-            lat_step = (max_lat - min_lat) / grid_h
-            cell_area_approx = (lon_step * 111320.0) * (lat_step * 110540.0)
+            # Vectorized building centroid assignment
+            valid_mask = gdf.geometry.notnull() & (~gdf.geometry.is_empty)
+            valid_gdf = gdf[valid_mask]
 
-            for _, row in gdf.iterrows():
-                geom = row.geometry
-                if geom is None or geom.is_empty:
-                    continue
+            if not valid_gdf.empty:
+                centroids = valid_gdf.geometry.centroid
+                c_lons = centroids.x.to_numpy()
+                c_lats = centroids.y.to_numpy()
 
-                c_lon, c_lat = geom.centroid.x, geom.centroid.y
-                if not (min_lon <= c_lon <= max_lon and min_lat <= c_lat <= max_lat):
-                    continue
+                in_bounds = (c_lons >= min_lon) & (c_lons <= max_lon) & (c_lats >= min_lat) & (c_lats <= max_lat)
+                if np.any(in_bounds):
+                    c_lons = c_lons[in_bounds]
+                    c_lats = c_lats[in_bounds]
+                    h_vals = valid_gdf["calc_height"].to_numpy(dtype=np.float32)[in_bounds]
+                    areas = (valid_gdf.geometry[in_bounds].area * 111320.0 * 110540.0).to_numpy(dtype=np.float32)
 
-                gx = int((c_lon - min_lon) / (max_lon - min_lon) * (grid_w - 1))
-                gy = int((max_lat - c_lat) / (max_lat - min_lat) * (grid_h - 1))
-                gx = max(0, min(grid_w - 1, gx))
-                gy = max(0, min(grid_h - 1, gy))
+                    gx = np.clip(((c_lons - min_lon) / (max_lon - min_lon) * (grid_w - 1)).astype(int), 0, grid_w - 1)
+                    gy = np.clip(((max_lat - c_lats) / (max_lat - min_lat) * (grid_h - 1)).astype(int), 0, grid_h - 1)
 
-                h_val = float(row.get("calc_height", self.DEFAULT_BUILDING_HEIGHT_M))
-                height_grid[gy, gx] += h_val
-                height_max_grid[gy, gx] = max(height_max_grid[gy, gx], h_val)
-                count_grid[gy, gx] += 1
-
-                geom_area = getattr(geom, "area", 0.0) * 111320.0 * 110540.0
-                area_grid[gy, gx] += geom_area
+                    np.add.at(height_grid, (gy, gx), h_vals)
+                    np.maximum.at(height_max_grid, (gy, gx), h_vals)
+                    np.add.at(count_grid, (gy, gx), 1.0)
+                    np.add.at(area_grid, (gy, gx), areas)
 
         # Compute mean building height per pixel
         valid_cells = count_grid > 0

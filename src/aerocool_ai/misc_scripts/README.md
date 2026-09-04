@@ -29,11 +29,11 @@ This directory contains administrative and migration scripts for database initia
      - `meteo_observations`
      - `users`
      - `telemetry_events`
+  4. Automatically seeds the database with default demo accounts:
+     - **Administrator**: `admin@aerocool.ai` (Password: `Admin@123`, Role: `admin`)
+     - **Climate Planner**: `planner@aerocool.ai` (Password: `Planner@123`, Role: `customer`)
 - **Usage**:
   ```bash
   # Execute via uv runner
   uv run python -m aerocool_ai.misc_scripts.initialize_postgis
-
-  # Or directly via Python
-  python -m aerocool_ai.misc_scripts.initialize_postgis
   ```

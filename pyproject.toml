@@ -12,6 +12,7 @@ dependencies = [
     "affine>=3.0.0",
     "asyncpg>=0.31.0",
     "beautifulsoup4>=4.15.0",
+    "cdsapi>=0.7.7",
     "earthengine-api>=1.7.40",
     "fastapi>=0.141.1",
     "geoalchemy2>=0.20.0",

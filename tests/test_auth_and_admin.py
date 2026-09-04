@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 import pytest
 from httpx import AsyncClient
 
@@ -33,7 +34,7 @@ async def test_demo_login_admin(async_client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_user_registration_and_login_flow(async_client: AsyncClient) -> None:
     """Test user registration and subsequent login."""
-    test_email = "test.officer@delhi.gov.in"
+    test_email = f"test.officer.{uuid.uuid4().hex[:8]}@delhi.gov.in"
     reg_payload = {
         "email": test_email,
         "password": "Password123!",

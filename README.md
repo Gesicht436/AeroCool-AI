@@ -164,14 +164,14 @@ $$R_n - G - H - \lambda E = 0$$
 Where:
 - **Net Radiation ($R_n$)**:
   $$R_n = (1 - \alpha) R_{sw\downarrow} + \varepsilon R_{lw\downarrow} - \varepsilon \sigma (T_s + 273.15)^4$$
-  - $\alpha$: Broadband surface albedo (calculated via Liang 2001 multispectral formula)
-  - $\varepsilon$: Surface thermal emissivity (derived via Sobrino NDVI thresholds)
+  - $\alpha$: Broadband surface albedo (calculated via Liang 2001 multispectral formula across Sentinel-2 bands $B_2, B_4, B_8, B_{11}, B_{12}$)
+  - $\varepsilon$: Surface thermal emissivity (derived via Sobrino NDVI thresholds and vegetation cavity effect)
   - $\sigma = 5.670374 \times 10^{-8} \, \text{W}/(\text{m}^2 \text{K}^4)$: Stefan-Boltzmann constant
-  - $R_{sw\downarrow}, R_{lw\downarrow}$: Downward shortwave solar and longwave atmospheric radiation
+  - $R_{sw\downarrow}, R_{lw\downarrow}$: Downward shortwave solar and longwave atmospheric radiation from ERA5-Land
 - **Sensible Heat Flux ($H$)**:
   $$H = \rho_{\text{air}} c_p \frac{T_s - T_{\text{air}}}{r_a}$$
   - $\rho = 1.205 \, \text{kg/m}^3, c_p = 1005 \, \text{J}/(\text{kg}\cdot\text{K})$
-  - $r_a = \frac{\ln(z / z_0)^2}{\kappa^2 u_{10}}$: Aerodynamic resistance to heat transfer ($z_0$ from building morphology)
+  - $r_a = \frac{\ln(z / z_0)^2}{\kappa^2 u_{10}}$: Aerodynamic resistance to heat transfer ($z_0$ roughness derived from OSM 3D morphology via Grimmond & Oke formula: $z_0 = 0.10 H_{\text{mean}} \sqrt{\lambda_p}$)
 - **Latent Heat Flux ($\lambda E$)**:
   $$\lambda E = f_v \cdot \text{ET}_0(R_n, T_{\text{air}}, u_{10}, \text{RH})$$
   - $f_v$: Fractional Vegetation Cover (FVC)
@@ -179,79 +179,127 @@ Where:
   $$G = \mu R_n \quad (\mu \approx 0.15 - 0.40 \text{ in dense urban asphalt/concrete})$$
 
 ### 2. Spatiotemporal Advection-Diffusion PDE Loss
-$$\mathcal{R}_{\text{PDE}} = \frac{\partial T_s}{\partial t} - D \left( \frac{\partial^2 T_s}{\partial x^2} + \frac{\partial^2 T_s}{\partial y^2} \right) + \mathbf{u} \cdot \nabla T_s - \frac{R_n - G - H - \lambda E}{\rho C_{\text{eff}}}$$
+$$\mathcal{R}_{\text{PDE}} = \frac{\partial T_s}{\partial t} - D \left( \frac{\partial^2 T_s}{\partial x^2} + \frac{\partial^2 T_s}{\partial y^2} \right) + \mathbf{u} \cdot \nabla T_s - \frac{R_n - G - H - \lambda E}{\rho C_{\text{eff}}} = 0$$
 
-The `UrbanHeatPINN` computes exact partial derivatives $\frac{\partial T_s}{\partial t}, \nabla^2 T_s$ using PyTorch Autograd to penalize violations of physical thermodynamics during neural training.
+The `UrbanHeatPINN` computes exact partial derivatives $\frac{\partial T_s}{\partial t}, \nabla^2 T_s$ using PyTorch Autograd to penalize violations of physical thermodynamics during neural training, preventing unphysical temperature predictions.
 
 ---
 
-## Quickstart & Installation
+## Step-by-Step Setup Guide
 
-### Prerequisites
-- Python 3.14+
-- `uv` package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh` or `winget install astral-sh.uv`)
-- Docker & Docker Compose (for PostgreSQL/PostGIS & Redis)
+Follow these sequential steps to set up and launch AeroCool-AI on your local workstation.
 
-### Setup with `uv`
+### Step 1: Install System Prerequisites
+1. **Python `>=3.12`**: Ensure Python is installed.
+2. **Astral `uv`**: Ultra-fast Python package and project manager.
+   ```powershell
+   # Windows (PowerShell)
+   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+   
+   # Linux / macOS
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+3. **Docker & Docker Desktop**: Required for PostgreSQL 16 + PostGIS 3.4 and Redis 7.
+4. **Node.js `>=18` & npm**: For running the React 19 geospatial dashboard.
 
-```bash
-# Clone repository
+### Step 2: Clone & Synchronize Dependencies
+```powershell
+# Clone the repository
 git clone https://github.com/Gesicht436/AeroCool-AI.git
 cd AeroCool-AI
 
-# Create virtual environment and synchronize dependencies
+# Create virtual environment and synchronize dependencies via uv
 uv sync
+```
 
-# Copy environment template
+### Step 3: Configure Remote Sensing Credentials (`.env`)
+Copy the environment template:
+```powershell
 cp .env.example .env
 ```
 
-### Launch Infrastructure & Database
+Open `.env` and fill in your remote sensing credentials:
 
-```bash
+1. **Google Earth Engine (GEE)** *(Landsat-8/9 thermal LST, Sentinel-2 L2A, and ESA WorldCover)*:
+   - Create a Service Account in [Google Cloud Console](https://console.cloud.google.com/) with the roles **Earth Engine Editor (Beta)** (or **Earth Engine Resource Viewer**) and **Service Usage Consumer**.
+   - Ensure the Google Earth Engine API is enabled and your project is registered at [console.earthengine.google.com](https://console.earthengine.google.com/).
+   - Download the JSON key file.
+   > [!IMPORTANT]
+   > On Windows, always use forward slashes (`/`) in your `.env` file path to prevent Python escape sequence errors (e.g. `\b` becoming backspace):
+   ```ini
+   GEE_PROJECT_ID=your-gcp-project-id
+   GEE_SERVICE_ACCOUNT=your-sa@your-project.iam.gserviceaccount.com
+   GEE_PRIVATE_KEY_FILE=C:/path/to/credentials/gee-key.json
+   ```
+
+2. **NASA Earthdata** *(ECOSTRESS diurnal thermal observations)*:
+   - Create a free account at [urs.earthdata.nasa.gov](https://urs.earthdata.nasa.gov/).
+   - Generate a User Token under your profile:
+   ```ini
+   EARTHDATA_BEARER_TOKEN=your-nasa-token-here
+   ```
+
+3. **Copernicus Climate Data Store (CDS)** *(ERA5-Land hourly meteorology)*:
+   - Create a free account at [cds.climate.copernicus.eu](https://cds.climate.copernicus.eu/).
+   - Copy your Personal Access Token from your user profile:
+   ```ini
+   CDS_API_KEY=your-cds-token-here
+   CDS_API_URL=https://cds.climate.copernicus.eu/api
+   ```
+
+4. **OpenStreetMap (OSM)**:
+   - **Zero setup required.** Queries Overpass API dynamically via OSMnx.
+
+### Step 4: Launch Infrastructure & Initialize Database
+Start the spatial database and Redis cache containers:
+```powershell
 # Start PostGIS and Redis via Docker Compose
 docker-compose up -d postgis redis
+```
 
-# Initialize PostGIS extensions and tables
+Once the containers are running and healthy, run the standalone provisioner to enable PostGIS extensions, create all ORM tables, and seed the default demo accounts:
+```powershell
 uv run python -m aerocool_ai.misc_scripts.initialize_postgis
 ```
+*Seeded Demo Accounts:*
+- **Admin**: `admin@aerocool.ai` (Password: `Admin@123`)
+- **Customer / Planner**: `planner@aerocool.ai` (Password: `Planner@123`)
 
-### Start FastAPI Backend Application
-
-```bash
-# Run API server locally with hot reload
+### Step 5: Launch FastAPI Backend
+```powershell
 uv run uvicorn aerocool_ai.backend_api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+- **Interactive Swagger Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **ReDoc Technical Reference**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+- **System Health Diagnostic**: [http://localhost:8000/health](http://localhost:8000/health)
 
-Interactive OpenAPI Documentation:
-- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
-
-### Start Frontend Application
-
-#### Option A: React 19 + TypeScript Dev Server (Port 3000)
-```bash
-# Navigate to frontend and start Vite HMR server
+### Step 6: Launch React 19 Frontend
+In a second terminal window:
+```powershell
 cd src/aerocool_ai/frontend
+npm.cmd install
 npm.cmd run dev
 ```
-- **React Web Client**: [http://localhost:3000](http://localhost:3000)
+- **Interactive UI Dashboard**: [http://localhost:3000](http://localhost:3000)
 
-#### Option B: Unified FastAPI Server (Serves API + React SPA on Port 8000)
-```bash
-# Start backend server from project root
-uv run uvicorn aerocool_ai.backend_api.main:app --host 0.0.0.0 --port 8000 --reload
-```
-- **React Web Dashboard**: [http://localhost:8000/dashboard](http://localhost:8000/dashboard)
-- **Interactive Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
+*(Alternatively, the compiled production dashboard is served directly by FastAPI at [http://localhost:8000/dashboard](http://localhost:8000/dashboard)).*
+
+---
+
+## Interactive Dashboard Highlights
+
+- **Indian City Presets**: 1-click geographic boundaries and climate zone profiles for Delhi NCR, Mumbai, Ahmedabad, Chennai, Bengaluru, and Hyderabad.
+- **Dual Currency Engine**: Seamless live conversion between Indian Rupees (₹ Lakhs/Crores) and US Dollars ($ USD) for municipal budget planning.
+- **1-Click Instant Demo Authentication**: Instant modal switching between `Admin User` (with live telemetry gauges and request audit stream) and `Customer User` (municipal climate planning).
+- **A/B Policy Comparison**: Compare two distinct interventions (e.g. *Cool Roofs* vs *Urban Tree Canopies*) at equivalent capital expenditure.
+- **Pareto Knapsack Efficiency Frontier**: Visualizes multi-budget trade-offs between capital spent and mean temperature reduction (°C), identifying the optimal knee point of diminishing returns.
+- **Strict Error Mode**: Zero mock fallbacks—surfaces clear error alerts with live API status so issues are caught immediately.
 
 ---
 
 ## API Endpoints Reference
 
-| Method | Path | Summary |
+| Method | Path | Summary & Description |
 |---|---|---|
 | `POST` | `/api/v1/hotspots/detect` | Ingests satellite & morphology data, returns RFC 7946 GeoJSON UHI hotspots and driver analysis. |
 | `GET` | `/api/v1/hotspots/{hotspot_id}` | Retrieves detailed thermodynamic profile and tailored mitigation recommendations. |
@@ -275,6 +323,11 @@ uv run uvicorn aerocool_ai.backend_api.main:app --host 0.0.0.0 --port 8000 --rel
 ```bash
 # Run unit and integration tests
 uv run pytest -v
+
+# Run tests for specific submodules
+uv run pytest tests/test_models.py -v
+uv run pytest tests/test_api.py -v
+uv run pytest tests/test_auth_and_admin.py -v
 ```
 
 ---
